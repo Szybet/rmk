@@ -1,6 +1,5 @@
 use core::fmt::Debug;
 
-#[cfg(all(feature = "split", feature = "_ble"))]
 use embassy_futures::select::{Either, select};
 use embassy_futures::yield_now;
 #[cfg(feature = "_ble")]
@@ -21,7 +20,8 @@ use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
 use crate::event::{
-    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+    ActionEvent, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event,
+    publish_event_async,
 };
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
@@ -141,10 +141,18 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(deadline) = self.mouse.next_deadline() {
-                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Ok(event) => event,
+                // If mouse repeat is pending, race subscribers against deadline
+                let either = if let Some(deadline) = self.mouse.next_deadline() {
+                    match with_deadline(
+                        deadline,
+                        select(
+                            self.keyboard_event_subscriber.next_message_pure(),
+                            self.control_action_subscriber.next_message_pure(),
+                        ),
+                    )
+                    .await
+                    {
+                        Ok(either) => either,
                         Err(_) => {
                             // Repeat deadline expired, fire repeat
                             self.fire_mouse_repeat().await;
@@ -153,9 +161,16 @@ impl Runnable for Keyboard<'_> {
                     }
                 } else {
                     // No repeat pending, wait indefinitely
-                    self.keyboard_event_subscriber.next_message_pure().await
+                    select(
+                        self.keyboard_event_subscriber.next_message_pure(),
+                        self.control_action_subscriber.next_message_pure(),
+                    )
+                    .await
                 };
-                self.process_inner(event).await
+                match either {
+                    Either::First(event) => self.process_inner(event).await,
+                    Either::Second(action) => self.process_control_action(action).await,
+                }
             };
         }
     }
@@ -173,6 +188,16 @@ pub struct Keyboard<'a> {
         { crate::KEYBOARD_EVENT_CHANNEL_SIZE },
         { crate::KEYBOARD_EVENT_SUB_SIZE },
         { crate::KEYBOARD_EVENT_PUB_SIZE },
+    >,
+
+    /// Control action subscriber - receive actions from other tasks
+    control_action_subscriber: embassy_sync::pubsub::Subscriber<
+        'static,
+        crate::RawMutex,
+        Action,
+        { crate::CONTROL_ACTION_EVENT_CHANNEL_SIZE },
+        { crate::CONTROL_ACTION_EVENT_SUB_SIZE },
+        { crate::CONTROL_ACTION_EVENT_PUB_SIZE },
     >,
 
     /// Unprocessed events
@@ -241,6 +266,7 @@ impl<'a> Keyboard<'a> {
         Keyboard {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
+            control_action_subscriber: Action::subscriber(),
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
@@ -378,6 +404,27 @@ impl<'a> Keyboard<'a> {
             }
         } else {
             self.process_key_action(key_action, event, false).await
+        }
+    }
+
+    /// Process control action
+    async fn process_control_action(&mut self, action: Action) {
+        match action {
+            Action::No => (),
+            Action::Key(_) | Action::KeyWithModifier(_, _) => {
+                info!("Process control action: {:?}", action);
+                self.process_key_action_tap(
+                    action,
+                    KeyboardEvent {
+                        pressed: true,
+                        pos: KeyboardEventPos::Key(KeyPos { row: 255, col: 255 }),
+                    },
+                )
+                .await;
+            }
+            _ => {
+                warn!("Process control action not implemented: {:?}", action);
+            }
         }
     }
 
@@ -2384,6 +2431,18 @@ mod test {
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::No);
             };
 
+            block_on(main);
+        }
+
+        #[test]
+        fn test_control_action_layer() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+                assert_eq!(keyboard.keymap.get_activated_layer(), 0);
+
+                keyboard.process_control_action(Action::LayerOn(1)).await;
+                assert_eq!(keyboard.keymap.get_activated_layer(), 1);
+            };
             block_on(main);
         }
     }

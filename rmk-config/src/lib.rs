@@ -373,6 +373,7 @@ define_event_config!(
     clear_peer,
     // Action events
     action,
+    control_action,
 );
 
 /// Configurations for keyboard layout
@@ -1060,6 +1061,10 @@ mod tests {
         assert_eq!(config.action.channel_size, 16);
         assert_eq!(config.action.pubs, 1);
         assert_eq!(config.action.subs, 0);
+
+        assert_eq!(config.control_action.channel_size, 8);
+        assert_eq!(config.control_action.pubs, 2);
+        assert_eq!(config.control_action.subs, 1);
     }
 
     #[test]

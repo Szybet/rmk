@@ -77,6 +77,7 @@ impl crate::KeyboardTomlConfig {
             peripheral_battery,
             clear_peer,
             action,
+            control_action,
         );
 
         // Only validate passkey settings when the build will emit passkey constants.
