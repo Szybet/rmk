@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
-    pub(crate) modifiers: ModifierCombination,
-    pub(crate) leds: LedIndicator,
-    pub(crate) mouse: MouseButtons,
+    pub modifiers: ModifierCombination,
+    pub leds: LedIndicator,
+    pub mouse: MouseButtons,
     // note: layer active states could be added too if needed
 }
 
@@ -59,13 +59,13 @@ impl StateBits {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Fork {
-    pub(crate) trigger: KeyAction,
-    pub(crate) negative_output: KeyAction,
-    pub(crate) positive_output: KeyAction,
-    pub(crate) match_any: StateBits,
-    pub(crate) match_none: StateBits,
-    pub(crate) kept_modifiers: ModifierCombination,
-    pub(crate) bindable: bool,
+    pub trigger: KeyAction,
+    pub negative_output: KeyAction,
+    pub positive_output: KeyAction,
+    pub match_any: StateBits,
+    pub match_none: StateBits,
+    pub kept_modifiers: ModifierCombination,
+    pub bindable: bool,
 }
 
 impl Default for Fork {
