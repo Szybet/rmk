@@ -251,7 +251,7 @@ impl UsbDeviceHandler {
 
 static USB_CONFIGURED: Watch<crate::RawMutex, (), 1> = Watch::new();
 static USB_DISABLED: Watch<crate::RawMutex, (), 1> = Watch::new();
-
+pub static USB_CONNECTED: Watch<crate::RawMutex, bool, 1> = Watch::new();
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
@@ -276,7 +276,8 @@ impl Handler for UsbDeviceHandler {
             CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
             USB_DISABLED.sender().clear();
             USB_CONFIGURED.sender().send(());
-            info!("Device configured, it may now draw up to the configured current from Vbus.")
+            info!("Device configured, it may now draw up to the configured current from Vbus.");
+            USB_CONNECTED.sender().send(true);
         } else {
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
         }
@@ -287,6 +288,7 @@ impl Handler for UsbDeviceHandler {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
+            USB_CONNECTED.sender().send(false);
         } else {
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
