@@ -4,7 +4,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-#[cfg(any(not(feature = "_no_usb_in_ble"), feature = "passkey_entry"))]
+#[cfg(not(feature = "_no_usb_in_ble"))]
 use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
